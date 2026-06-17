@@ -11,6 +11,16 @@ scopes, audit log, endpoint control, CORS) are out of scope.
 > Decisions and the source citations are in [docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md); the
 > spec is in [docs/specs/api-rate-limiting.md](docs/specs/api-rate-limiting.md).
 
+## Tools & AI workflow
+
+Built with **Claude Code (Opus 4.8)**. The loop was: **propose → verify against the real
+source → TDD red/green**, with me reviewing as the quality gate at each step. Framework
+behaviour was checked against the actual Redmine code (`file:line`) and pinned Rails 7.2.3
+gem source rather than taken from the model's memory, and every change landed red-first then
+green. The artifacts are the decision log in [docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md)
+(Context → Options → Decision → Why, plus where I corrected/validated the AI) and the commit
+history.
+
 ## Approach
 
 A small controller concern, [`ApiRateLimit`](app/controllers/concerns/api_rate_limit.rb),
