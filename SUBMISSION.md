@@ -138,10 +138,10 @@ the DB-specific or browser parts of that matrix.
 
 Two pre-existing upstream weaknesses are unrelated to this slice:
 
-- A functional test gated to a single adapter:
-  [`test_index_grouped_by_created_on_if_time_zone_is_utc`](test/functional/issues_controller_test.rb#L428)
-  is `skip if mysql?` (`# TODO: test fails with mysql`) — a known mysql2-only issue; it
-  passes on sqlite3/postgresql.
+- A functional test that fails on MySQL only:
+  [`test_index_sort_by_spent_hours`](test/functional/issues_controller_test.rb#L1334) — a
+  sort-by-`spent_hours` assertion sensitive to the row ordering of equal values on MySQL. It
+  passes on sqlite3 and postgresql.
 - The browser-based **system tests** (Capybara/Selenium) are environment-sensitive and can
   be flaky in CI.
 
