@@ -64,6 +64,15 @@ class Redmine::ApiTest::RateLimitingTest < Redmine::ApiTest::Base
            'expected a Retry-After header on the 429 response'
   end
 
+  def test_rate_limit_headers_are_present_on_a_normal_response
+    get '/users/current.json', :headers => @headers
+    assert_response :ok
+    assert_equal TEST_LIMIT.to_s, response.headers['RateLimit-Limit']
+    # One request spent, so limit - 1 remain.
+    assert_equal (TEST_LIMIT - 1).to_s, response.headers['RateLimit-Remaining']
+    assert_equal TEST_WINDOW.to_s, response.headers['RateLimit-Reset']
+  end
+
   def test_token_budget_resets_after_the_window_elapses
     # Spend the whole budget so the token is throttled.
     (TEST_LIMIT + 1).times { get '/users/current.json', :headers => @headers }

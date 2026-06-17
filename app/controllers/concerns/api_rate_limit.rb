@@ -40,10 +40,17 @@ module ApiRateLimit
   def enforce_api_rate_limit
     return unless api_rate_limit_enabled?
 
+    limit = api_rate_limit
     window = api_rate_limit_window
     count = STORE.increment(api_rate_limit_key, 1, :expires_in => window)
 
-    if count > api_rate_limit
+    response.headers['RateLimit-Limit'] = limit.to_s
+    response.headers['RateLimit-Remaining'] = [limit - count, 0].max.to_s
+    # Reset is the window length (seconds), matching Retry-After. We do not track
+    # the precise window start, so this is the worst-case time to a fresh budget.
+    response.headers['RateLimit-Reset'] = window.to_s
+
+    if count > limit
       response.headers['Retry-After'] = window.to_s
       head :too_many_requests
     end
