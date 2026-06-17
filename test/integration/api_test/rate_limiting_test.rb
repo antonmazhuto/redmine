@@ -30,12 +30,13 @@ class Redmine::ApiTest::RateLimitingTest < Redmine::ApiTest::Base
 
   # Small budget so the test only needs a handful of requests to go over.
   TEST_LIMIT = 3
+  TEST_WINDOW = 60
 
   def setup
     super # Setting.rest_api_enabled = '1'
     @original_env = RATE_LIMIT_ENV_KEYS.index_with { |key| ENV[key] }
     ENV['REDMINE_API_RATE_LIMIT'] = TEST_LIMIT.to_s
-    ENV['REDMINE_API_RATE_LIMIT_WINDOW'] = '60'
+    ENV['REDMINE_API_RATE_LIMIT_WINDOW'] = TEST_WINDOW.to_s
     ENV['REDMINE_API_RATE_LIMIT_ENABLED'] = 'true'
 
     # A fresh user + API token per test means a fresh per-token budget.
@@ -61,5 +62,25 @@ class Redmine::ApiTest::RateLimitingTest < Redmine::ApiTest::Base
     assert_response :too_many_requests
     assert response.headers['Retry-After'].present?,
            'expected a Retry-After header on the 429 response'
+  end
+
+  def test_token_budget_resets_after_the_window_elapses
+    # Spend the whole budget so the token is throttled.
+    (TEST_LIMIT + 1).times { get '/users/current.json', :headers => @headers }
+    assert_response :too_many_requests
+
+    # Still throttled before the window has fully elapsed: the fixed window must
+    # not slide forward on each request.
+    travel(TEST_WINDOW - 1) do
+      get '/users/current.json', :headers => @headers
+      assert_response :too_many_requests
+    end
+
+    # Once the original window has passed, the counter expires and the budget
+    # is available again.
+    travel(TEST_WINDOW + 1) do
+      get '/users/current.json', :headers => @headers
+      assert_response :ok
+    end
   end
 end
