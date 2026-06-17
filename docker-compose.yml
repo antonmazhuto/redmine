@@ -8,6 +8,11 @@ services:
       # Dev/test secret only — never used in production.
       SECRET_KEY_BASE: "redmine_ratelimit_dev_secret_key_base_change_me"
       RAILS_MAX_THREADS: "5"
+      # Rate-limit config, overridable from the host shell, e.g.
+      # `REDMINE_API_RATE_LIMIT=3 docker compose up`.
+      REDMINE_API_RATE_LIMIT: "${REDMINE_API_RATE_LIMIT:-100}"
+      REDMINE_API_RATE_LIMIT_WINDOW: "${REDMINE_API_RATE_LIMIT_WINDOW:-60}"
+      REDMINE_API_RATE_LIMIT_ENABLED: "${REDMINE_API_RATE_LIMIT_ENABLED:-true}"
     volumes:
       # Bind-mount the source for live editing; gems live in /usr/local/bundle
       # (outside the working dir) so they are not shadowed by this mount.
