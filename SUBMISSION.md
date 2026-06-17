@@ -91,14 +91,30 @@ The first command exercises the core: requests within the budget return `200`, t
 over the limit returns `429` with a `Retry-After` header, and the budget resets after the
 window. See [test/integration/api_test/rate_limiting_test.rb](test/integration/api_test/rate_limiting_test.rb).
 
-To see a 429 by hand against a running server, create an API token for a user, set a low
-limit, and loop:
+To see a 429 by hand against a running server (a fresh DB has the REST API disabled and no
+token, so we enable it and mint one). These commands are copy-pasteable and verified:
 
 ```bash
-REDMINE_API_RATE_LIMIT=3 docker compose up   # low budget for a quick demo
-# then, with a valid API key:
+# 1. Start the app with a low budget so a handful of requests is enough.
+#    (docker-compose.yml passes these vars through to the container.)
+REDMINE_API_RATE_LIMIT=3 docker compose up -d
+
+# 2. Enable the REST API and mint an API token for the admin user; capture it.
+KEY=$(docker compose exec -T web bin/rails runner \
+  'Setting.rest_api_enabled = "1"; \
+   u = User.find_by(admin: true); \
+   print Token.where(user: u, action: "api").first_or_create!.value')
+
+# 3. Hit an API endpoint 5 times — the 4th and 5th are throttled.
 for i in $(seq 1 5); do \
-  curl -s -o /dev/null -w "%{http_code} " -H "X-Redmine-API-Key: <KEY>" \
+  curl -s -o /dev/null -w "%{http_code} " -H "X-Redmine-API-Key: $KEY" \
     http://localhost:3000/users/current.json; \
 done; echo   # -> 200 200 200 429 429
+
+# (optional) inspect the headers on a single request
+curl -s -D - -o /dev/null -H "X-Redmine-API-Key: $KEY" \
+  http://localhost:3000/users/current.json | grep -iE 'RateLimit-|Retry-After'
+# RateLimit-Limit / RateLimit-Remaining / RateLimit-Reset, plus Retry-After on a 429
+
+docker compose down   # stop the app when done
 ```

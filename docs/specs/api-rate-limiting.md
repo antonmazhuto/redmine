@@ -4,7 +4,7 @@ A focused slice: authenticated API callers get a per-token request budget; over 
 returns **HTTP 429**. Scope, decision, and verified framework facts live in
 [../AI_WORKFLOW.md](../AI_WORKFLOW.md) (Decision 001). This spec is the *what* before tests.
 
-Legend: **[MVP]** required for a defensible slice · **[Nice]** stretch, only if time remains.
+Legend: **[MVP]** required for a defensible slice · **[Nice]** stretch · **[Done]** shipped.
 
 ---
 
@@ -22,7 +22,7 @@ before_action :enforce_api_rate_limit, if: -> { api_request? && User.current.log
 Behaviour per request, when the guard passes:
 1. Build the key (§2). If no key can be derived → do nothing (let it through).
 2. `count = store.increment(key, 1, expires_in: window)` on the dedicated store (§4).
-3. Set `RateLimit-*` headers (§3, **[Nice]**).
+3. Set `RateLimit-*` headers (§3, **[Done]**).
 4. If `count > limit` → render 429 (§3) and halt; else continue.
 
 The guard `api_request? && User.current.logged?` is what keeps web/HTML and
@@ -51,7 +51,8 @@ Follow the codebase idiom for API errors (`render_error` → `format.any { head 
 
 - Status: **429 Too Many Requests** (`head :too_many_requests`).
 - **`Retry-After`**: seconds until the current window resets (integer).  **[MVP]**
-- **`RateLimit-Limit` / `RateLimit-Remaining` / `RateLimit-Reset`** on API responses.  **[Nice]**
+- **`RateLimit-Limit` / `RateLimit-Remaining` / `RateLimit-Reset`** on API responses
+  (`RateLimit-Remaining` floored at 0; set on both 200 and 429 paths).  **[Done]**
 
 ## 4. Fixed window via the store  **[MVP]**
 
@@ -66,8 +67,10 @@ each hit — a true fixed window. First write of a missing key sets `expires_in:
 (Full quote in AI_WORKFLOW Decision 001.)
 
 `Retry-After` / `RateLimit-Reset` need the window's remaining time. MemoryStore doesn't
-expose a public TTL read, so we derive reset from the **first-seen timestamp**: on `count == 1`
-stamp `now`; reset = `stamped + window`. (Store the stamp in the same dedicated store.)
+expose a public TTL read. **Shipped decision:** keep it simple — both report the full
+**window length** (seconds), not the precise time-to-reset. This is the worst-case time to
+a fresh budget and avoids tracking a per-window start timestamp. A precise countdown would
+need first-seen-timestamp tracking; deferred as not worth the complexity for this slice.
 
 > To verify: that a single dedicated `MemoryStore` instance is shared across requests in the
 > test/dev server (it is per-process — acceptable, and the documented limitation). Confirm
@@ -94,10 +97,13 @@ Tests lower the limit (e.g. 2–3) to exercise the boundary cheaply.
 - No admin UI, settings-screen toggle, or per-user limit overrides — ENV only.
 - No token-expiration, scopes, audit log, endpoint control, or CORS (other #43881 pillars).
 
-## 7. Open items to verify before/while coding
+## 7. Items resolved during implementation
 
-1. **Token source for the key** — `api_key_from_request` vs. resolved `Token` (§2).
-2. **Window-reset timing source** — first-seen stamp approach for `Retry-After`/`Reset` (§4).
-3. **Dedicated store lifecycle** — single shared per-process instance (§4).
-4. **MVP boundary**: §1, §2, §4, §5, and the 429 + `Retry-After` in §3. The `RateLimit-*`
-   header trio is **[Nice]** and can land after green if time allows.
+1. **Token source for the key** — used `api_key_from_request` (header/param token), hashed;
+   falls back to `User.current.id`. **[Done]**
+2. **`Retry-After` / `RateLimit-Reset`** — report the full window length, no timestamp
+   tracking (see §4). **[Done]**
+3. **Dedicated store lifecycle** — a single per-process `MemoryStore` constant; cleared in
+   the global test teardown so counts don't leak across tests. **[Done]**
+4. **Scope shipped**: all of §1–§5, the 429 + `Retry-After` **and** the `RateLimit-*`
+   header trio. The full API integration suite stays green with the limiter enabled.
