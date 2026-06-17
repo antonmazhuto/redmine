@@ -128,3 +128,22 @@ curl -s -D - -o /dev/null -H "X-Redmine-API-Key: $KEY" \
 
 docker compose down   # stop the app when done
 ```
+
+## CI note
+
+The repo inherits Redmine's GitHub Actions matrix (`.github/workflows/tests.yml`), which
+runs the suite across `sqlite3`, `mysql2`, and `postgresql`. This change is **API-only and
+database-agnostic** — no migrations, no schema or SQL changes — so it doesn't interact with
+the DB-specific or browser parts of that matrix.
+
+Two pre-existing upstream weaknesses are unrelated to this slice:
+
+- A functional test gated to a single adapter:
+  [`test_index_grouped_by_created_on_if_time_zone_is_utc`](test/functional/issues_controller_test.rb#L428)
+  is `skip if mysql?` (`# TODO: test fails with mysql`) — a known mysql2-only issue; it
+  passes on sqlite3/postgresql.
+- The browser-based **system tests** (Capybara/Selenium) are environment-sensitive and can
+  be flaky in CI.
+
+Neither touches API authentication or rate limiting. The slice's own tests and the full API
+integration suite pass — verify with the Docker command above.
