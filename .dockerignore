@@ -1,0 +1,11 @@
+.git
+.gitignore
+.claude
+log/*.log
+tmp/cache
+tmp/pids
+db/*.sqlite3
+public/assets
+files/*
+!files/.keep
+coverage

@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    image: redmine-ratelimit
+    ports:
+      - "3000:3000"
+    environment:
+      # Dev/test secret only — never used in production.
+      SECRET_KEY_BASE: "redmine_ratelimit_dev_secret_key_base_change_me"
+      RAILS_MAX_THREADS: "5"
+    volumes:
+      # Bind-mount the source for live editing; gems live in /usr/local/bundle
+      # (outside the working dir) so they are not shadowed by this mount.
+      - .:/usr/src/redmine
+    stdin_open: true
+    tty: true
