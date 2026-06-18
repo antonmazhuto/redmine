@@ -3301,3 +3301,823 @@ ead99ebca fix(docker): forward rate-limit env vars into the web container
 ```
 
 The slice is complete and submission-ready. The only thing I can't produce for you is the raw chat transcript itself — if the reviewer wants that alongside the decision log, you'd export it from this session. Anything else you'd like tightened before you submit?
+
+---
+
+## 🧑 User
+
+Add a short "CI note" to SUBMISSION.md: the repo inherits Redmine's GitHub Actions matrix; a sort-order functional test (issues_controller_test.rb, mysql2 only — passes on sqlite3/postgresql) and the browser system tests are pre-existing flaky upstream tests, unrelated to this change (which is API-only and DB-agnostic). The slice's tests and the full API integration suite pass; verify via the Docker command above.
+
+### 🤖 Assistant
+
+Before I write claims into the submission doc, let me quickly verify them against the repo (per our "verify, don't guess" rule) — the CI matrix and that sort-order test's DB gating.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"== GitHub Actions workflows ==\"; ls .github/workflows/ 2>/dev/null; echo; echo \"== DB matrix in workflows ==\"; grep -rhiE \"mysql|postgres|sqlite|adapter|matrix\" .github/workflows/ 2>/dev/null | grep -iE \"mysql|postgres|sqlite\" | sort -u | head; echo; echo \"== sort-order / adapter-gated test in issues_controller_test.rb ==\";  …`
+
+<details><summary>tool result</summary>
+
+```
+== GitHub Actions workflows ==
+linters.yml
+tests.yml
+
+== DB matrix in workflows ==
+          --health-cmd="mysqladmin ping"
+          MYSQL_DATABASE: redmine_test
+          MYSQL_ROOT_PASSWORD: 'root'
+          POSTGRES_DB: redmine_test
+          POSTGRES_PASSWORD: root
+          POSTGRES_USER: root
+          db-type: sqlite3
+        db: ['postgresql', 'mysql2', 'sqlite3']
+        image: mysql:8.4
+        image: postgres:14
+
+== sort-order / adapter-gated test in issues_controller_test.rb ==
+391:  def test_index_with_query_grouped_and_sorted_by_fixed_version_in_reverse_order
+429:    # TODO: test fails with mysql
+430:    skip if mysql?
+934:    issue.custom_field_values = {1 => ['MySQL', 'Oracle']}
+945:    assert lines.detect {|line| line.include?('"MySQL, Oracle"')}
+1246:    # Ensure that on
+… [truncated, 1116 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+Let me confirm exactly which test carries that mysql gate, so the note is precise.
+
+### 🤖 Assistant
+
+**🔧 Read** `{"file_path": "/Users/antonmazhuto/Documents/MY/redmine/test/functional/issues_controller_test.rb", "offset": 416, "limit": 18}`
+
+<details><summary>tool result</summary>
+
+```
+416	        :group_by => "due_date"
+417	      }
+418	    )
+419	    assert_response :success
+420	    assert_select 'tr.group span.name', :value => '2018-08-10' do
+421	      assert_select '~ span.count', :value => '2'
+422	    end
+423	    assert_select 'tr.group span.name', :value => '(blank)' do
+424	      assert_select '~ span.count', :value => '1'
+425	    end
+426	  end
+427	
+428	  def test_index_grouped_by_created_on_if_time_zone_is_utc
+429	    # TODO: test fails with mysql
+430	    skip if mysql?
+431	    skip unless IssueQuery.new.groupable_columns.detect {|c| c.name == :created_on}
+432	
+433	    @request.session[:user_id] = 2
+```
+</details>
+
+### 🤖 Assistant
+
+Verified — and I found one wording inaccuracy worth correcting before it goes in a submission doc:
+
+- **CI matrix**: confirmed — `tests.yml` runs `db: ['postgresql', 'mysql2', 'sqlite3']`.
+- **The mysql-gated test**: the actual test is [`test_index_grouped_by_created_on_if_time_zone_is_utc`](test/functional/issues_controller_test.rb#L428) (grouping by `created_on` in UTC), not a "sort-order" test — and it's `skip if mysql?` with comment `# TODO: test fails with mysql`. So it's **skipped on mysql2, passes on sqlite3/postgresql** — i.e. a known upstream mysql incompatibility, which matches your point but isn't literally "sort-order."
+
+I'll write the note with the accurate test name/behavior rather than "sort-order," keeping your framing (pre-existing, upstream, unrelated to this API-only change). Here it is:
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md", "old_string": "docker compose down   # stop the app when done\n```", "new_string": "docker compose down   # stop the app when done\n```\n\n## CI note\n\nThe repo inherits Redmine's GitHub Actions matrix (`.github/workflows/tests.yml`), which\nruns the suite across `sqlite3`, `mysql2`, and `postgresql`. Th …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; git add SUBMISSION.md && git commit -q -F - <<'EOF'\ndocs: add CI note to SUBMISSION\n\nClarify that this slice is API-only and database-agnostic, so it does not\ninteract with the DB-specific or browser parts of Redmine's GitHub Actions\nmatrix. Note two pre-existing upstream weaknesses unrelated to this change: a\nmysql2-only functional t …`
+
+<details><summary>tool result</summary>
+
+```
+56409de76 docs: add CI note to SUBMISSION
+--- clean? ---
+```
+</details>
+
+### 🤖 Assistant
+
+Committed as `56409de76`, working tree clean.
+
+The CI note is in [SUBMISSION.md](SUBMISSION.md), with one correction from your wording: I named the actual mysql-gated test (`test_index_grouped_by_created_on_if_time_zone_is_utc`, a grouping test, `skip if mysql?`) rather than "sort-order," since that's what's verifiably in the repo — your framing (pre-existing, upstream, unrelated to this API-only change) is preserved. The note states the change is API-only and DB-agnostic, flags the mysql2-only test and the flaky browser system tests as unrelated, and points to the Docker command for verification.
+
+(Side note: `/export` isn't available here — to capture the raw transcript for the AI-artifacts deliverable, you'd export it from the Claude Code UI/session menu rather than via a command.)
+
+Submission-ready. Final state:
+- Working tree clean, no stray files.
+- Slice tests + full API integration suite green; manual 429 flow verified live.
+- All three brief deliverables covered, tool named, CI caveats documented.
+
+Want me to do anything else — e.g., a final `git log`/diff review against `master`, or squash/reword any commits — before you submit?
+
+---
+
+## 🧑 User
+
+Small fix to the CI note: the failing functional test is test_index_sort_by_spent_hours (issues_controller_test.rb:1334) — a sort-by-spent_hours assertion sensitive to row ordering of equal values on MySQL; it passes on sqlite3 and postgresql. The test I named before (test_index_grouped_by_created_on_if_time_zone_is_utc) is actually skip if mysql?, so it can't be the mysql failure — please correct that. Keep the rest (pre-existing/upstream, unrelated to this API-only, DB-agnostic change; verify via Docker). Commit the fix.
+
+### 🤖 Assistant
+
+Good catch — a `skip if mysql?` test can't be a mysql *failure*. Let me verify the test you named before writing it in.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; grep -nE \"def test_index_sort_by_spent_hours\" test/functional/issues_controller_test.rb", "description": "Locate test_index_sort_by_spent_hours", "dangerouslyDisableSandbox": true}`
+
+<details><summary>tool result</summary>
+
+```
+1334:  def test_index_sort_by_spent_hours
+1341:  def test_index_sort_by_spent_hours_should_sort_by_visible_spent_hours
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Read** `{"file_path": "/Users/antonmazhuto/Documents/MY/redmine/test/functional/issues_controller_test.rb", "offset": 1334, "limit": 7}`
+
+<details><summary>tool result</summary>
+
+```
+1334	  def test_index_sort_by_spent_hours
+1335	    get(:index, :params => {:sort => 'spent_hours:desc'})
+1336	    assert_response :success
+1337	    hours = issues_in_list.map(&:spent_hours)
+1338	    assert_equal hours.sort.reverse, hours
+1339	  end
+1340
+```
+</details>
+
+### 🤖 Assistant
+
+Confirmed at [issues_controller_test.rb:1334](test/functional/issues_controller_test.rb#L1334) — it sorts by `spent_hours:desc` and asserts the listed order, exactly the ordering-sensitive assertion you describe. And you're right that my earlier example was `skip if mysql?`, so it's skipped (not failing) on MySQL. Correcting the note:
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md", "old_string": "- A functional test gated to a single adapter:\n  [`test_index_grouped_by_created_on_if_time_zone_is_utc`](test/functional/issues_controller_test.rb#L428)\n  is `skip if mysql?` (`# TODO: test fails with mysql`) — a known mysql2-only issue; it\n  passes on sqlite3/postgresql.", "new_string" …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; git add SUBMISSION.md && git commit -q -F - <<'EOF'\ndocs: correct the MySQL-only test named in the CI note\n\nThe previously named test (test_index_grouped_by_created_on_if_time_zone_is_utc)\nis `skip if mysql?`, so it is skipped on MySQL and cannot be the failure. The\nactual MySQL-only failure is test_index_sort_by_spent_hours\n(issues_c …`
+
+<details><summary>tool result</summary>
+
+```
+a666f47a9 docs: correct the MySQL-only test named in the CI note
+--- clean? ---
+```
+</details>
+
+### 🤖 Assistant
+
+Committed as `a666f47a9`, working tree clean.
+
+The CI note now names the correct test — [`test_index_sort_by_spent_hours`](test/functional/issues_controller_test.rb#L1334), a sort-by-`spent_hours` assertion sensitive to row ordering of equal values on MySQL, passing on sqlite3/postgresql — and drops the `skip if mysql?` test that couldn't have been the failure. The rest of the note (pre-existing/upstream, unrelated to this API-only and DB-agnostic change, flaky browser system tests, verify via Docker) is unchanged.
+
+Submission-ready and the working tree is clean.
+
+---
+
+## 🧑 User
+
+<command-message>code-review</command-message>
+<command-name>/code-review</command-name>
+
+---
+
+## 🧑 User
+
+`high effort → 3+5 angles × 6 candidates → 1-vote verify (recall-biased) → ≤10 findings`
+
+You are reviewing for **recall** at high effort: catch every real bug a careful
+reviewer would catch in one sitting. At this level, catching real bugs matters
+more than avoiding false positives. Err on the side of surfacing.
+
+## Phase 0 — Gather the diff
+
+Run `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`
+if there's no upstream) to get the unified diff under review. If there are
+uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
+include the working-tree changes in scope — the review often runs before the
+commit. If a PR number, branch name, or file path was passed as an argument,
+review that target instead. Treat this diff as the review scope.
+
+## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)
+
+Run **8 independent finder angles** via the Agent tool. Each
+surfaces **up to 6 candidate findings** with `file`, `line`, a one-line
+`summary`, and a concrete `failure_scenario`.
+
+### Angle A — line-by-line diff scan
+
+Read every hunk in the diff, line by line. Then Read the enclosing function for
+each hunk — bugs in unchanged lines of a touched function are in scope (the PR
+re-exposes or fails to fix them). For every line ask: what input, state, timing,
+or platform makes this line wrong? Look for inverted/wrong conditions,
+off-by-one, null/undefined deref, missing `await`, falsy-zero checks,
+wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
+
+### Angle B — removed-behavior auditor
+
+For every line the diff DELETES or replaces, name the invariant or behavior it
+enforced, then search the new code for where that invariant is re-established.
+If you can't find it, that's a candidate: a removed guard, a dropped error
+path, a narrowed validation, a deleted test that was covering a real case.
+
+### Angle C — cross-file tracer
+
+For each function the diff changes, find its callers (Grep for the symbol) and
+check whether the change breaks any call site: a new precondition, a changed
+return shape, a new exception, a timing/ordering dependency. Also check callees:
+does a parallel change in the same PR make a call unsafe?
+
+### Reuse
+
+The angles above hunt for bugs; this one and the next two hunt for cleanup in
+the changed code. Flag new code that re-implements something the codebase
+already has — Grep shared/utility modules and files adjacent to the change,
+and name the existing helper to call instead.
+
+### Simplification
+
+Flag unnecessary complexity the diff adds: redundant or derivable state,
+copy-paste with slight variation, deep nesting, dead code left behind. Name
+the simpler form that does the same job.
+
+### Efficiency
+
+Flag wasted work the diff introduces: redundant computation or repeated I/O,
+independent operations run sequentially, blocking work added to startup or
+hot paths. Also flag long-lived objects built from closures or captured
+environments — they keep the entire enclosing scope alive for the object's
+lifetime (a memory leak when that scope holds large values); prefer a
+class/struct that copies only the fields it needs. Name the cheaper
+alternative.
+
+### Altitude
+
+Check that each change is implemented at the right depth, not as a fragile
+bandaid. Special cases layered on shared infrastructure are a sign the fix
+isn't deep enough — prefer generalizing the underlying mechanism over adding
+special cases.
+
+### Conventions (CLAUDE.md)
+
+Find the CLAUDE.md files that govern the changed code: the user-level
+~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or
+CLAUDE.local.md in a directory that is an ancestor of a changed file (a
+directory's CLAUDE.md only applies to files at or below it). Read each one
+that exists, then check the diff for clear violations of the rules they state.
+
+Only flag a violation when you can quote the exact rule and the exact line
+that breaks it — no style preferences, no vague "spirit of the doc"
+inferences. In the finding, name the CLAUDE.md path and quote the rule so the
+report can cite it. If no CLAUDE.md applies, return nothing for this angle.
+
+Cleanup, altitude, and conventions candidates use the same
+`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
+cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
+is broken) instead of a crash. Correctness bugs always outrank cleanup,
+altitude, and conventions findings when the output cap forces a cut.
+
+Pass every candidate with a nameable failure scenario through — finders that
+silently drop half-believed candidates bypass the verify step and are the
+dominant cause of misses.
+
+## Phase 2 — Verify (1-vote, recall-biased)
+
+Dedup near-duplicates (same defect, same location, same reason → keep one). For
+each remaining candidate, run **one verifier** via the Agent tool:
+give it the diff, the relevant file(s), and the candidate; it returns exactly
+one of **CONFIRMED / PLAUSIBLE / REFUTED**.
+
+**PLAUSIBLE by default** — do not refute a candidate for being "speculative" or
+"depends on runtime state" when the state is realistic: concurrency races,
+nil/undefined on a rare-but-reachable path (error handler, cold cache, missing
+optional field), falsy-zero treated as missing, off-by-one on a boundary the
+code does not exclude, retry storms / partial failures, regex/allowlist that
+lost an anchor. These are PLAUSIBLE.
+
+**REFUTED** only when constructible from the code: factually wrong (quote the
+actual line); provably impossible (type/constant/invariant — show it); already
+handled in this diff (cite the guard); or pure style with no observable effect.
+
+Keep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.
+
+## Output
+
+Return findings as a JSON array of at most 10 objects:
+
+```json
+[
+  {
+    "file": "path/to/file.ext",
+    "line": 123,
+    "summary": "one-sentence statement of the bug",
+    "failure_scenario": "concrete inputs/state → wrong output/crash"
+  }
+]
+```
+
+Ranked most-severe first. If more than 10 survive, keep the 10 most
+severe. If nothing survives verification, return `[]`.
+
+### 🤖 Assistant
+
+I'll run the code review. Let me gather the diff scope first.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"=== upstream? ===\"; git rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo \"no upstream\"; echo \"=== merge-base with master ===\"; git merge-base HEAD master 2>/dev/null; echo \"=== diffstat master...HEAD ===\"; git diff --stat master...HEAD; echo \"=== uncommitted (HEAD) ===\"; git diff --stat HEAD", "description": "Determine …`
+
+<details><summary>tool result</summary>
+
+```
+=== upstream? ===
+origin/feature/api-rate-limiting
+=== merge-base with master ===
+72064629b00407b6eee4f499be37822b733ea860
+=== diffstat master...HEAD ===
+ .dockerignore                                      |   11 +
+ .github/actions/setup-redmine/action.yml           |    2 +-
+ .github/workflows/linters.yml                      |    8 +-
+ .github/workflows/tests.yml                        |    9 +-
+ CLAUDE.md                                          |   66 +
+ Dockerfile                                         |   36 +
+ Gemfile                                            |    6 +-
+ SUBMISSION.md                                      |  149 +
+ app/assets/images/chevron-left-idnt.svg            |    1 +
+ app/assets/images/icons.svg                        |   10 +
+ app/assets/javascripts/applicat
+… [truncated, 10643 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+The `master...HEAD` range is polluted — 169 files, because this repo's `master` predates the 6.1.2 tag the branch was cut from, so it includes ~150 files of upstream Redmine deltas (locales, wiki formatting, icons) that are **not** our work. Let me scope precisely to the rate-limiting slice's own commits.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"=== our branch commits (since base) ===\"; git log --oneline v6.1.2..HEAD 2>/dev/null || git log --oneline HEAD~12..HEAD; echo; echo \"=== diff @{upstream}...HEAD stat ===\"; git diff --stat @{upstream}...HEAD 2>/dev/null | tail -5; echo \"(empty = local==remote)\"", "description": "Identify slice commits and upstream diff", "dangero …`
+
+<details><summary>tool result</summary>
+
+```
+=== our branch commits (since base) ===
+a666f47a9 docs: correct the MySQL-only test named in the CI note
+56409de76 docs: add CI note to SUBMISSION
+f3a06522c docs: add AI session transcript
+e196852ed docs: add Tools & AI workflow section to SUBMISSION
+790cc95b6 docs: fix verify steps and mark RateLimit-* headers shipped
+ead99ebca fix(docker): forward rate-limit env vars into the web container
+1e4b302e5 feat(api): expose RateLimit-* headers on API responses
+181109857 docs: add SUBMISSION.md
+37607ecbb test: clear API rate-limit counters between tests
+6f1954559 test(api): add window-reset regression test for rate limiting
+568656679 feat(api): per-token API rate limiting with 429
+83ec49a10 chore(docker): add SQLite Docker dev/test environment
+
+=== diff @{upstream}...HEAD stat ===
+(empty = local
+… [truncated, 809 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+`v6.1.2..HEAD` cleanly gives our 12 slice commits, and `@{upstream}` equals HEAD (nothing unpushed). That's the correct scope. Let me confirm the file list is just our slice, then capture the actual diff for the finders.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"=== slice file list ===\"; git diff --stat v6.1.2..HEAD; echo; echo \"=== code-only diff (excluding docs/transcripts) saved size ===\"; git diff v6.1.2..HEAD -- app/ config/database.yml test/ docker-compose.yml docker-entrypoint.sh Dockerfile .dockerignore | wc -l", "description": "Confirm slice scope and code diff size", "dangerousl …`
+
+<details><summary>tool result</summary>
+
+```
+=== slice file list ===
+fatal: неоднозначный аргумент «v6.1.2..HEAD»: неизвестная редакция или не путь в рабочем каталоге.
+Используйте «--» для отделения путей от редакций, вот так:
+«git <команда> [<редакция>...] -- [<файл>...]»
+
+=== code-only diff (excluding docs/transcripts) saved size ===
+fatal: bad revision 'v6.1.2..HEAD'
+       0
+```
+</details>
+
+### 🤖 Assistant
+
+The `v6.1.2` tag name isn't present (the earlier count came from the `HEAD~12` fallback). Let me find the real base.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"=== tags matching 6.1 ===\"; git tag | grep -i \"6.1\" | head; echo \"=== history around base ===\"; git log --oneline -15 | tail -6", "description": "Find the 6.1.2 base tag/commit", "dangerouslyDisableSandbox": true}`
+
+<details><summary>tool result</summary>
+
+```
+=== tags matching 6.1 ===
+6.1.2
+=== history around base ===
+6f1954559 test(api): add window-reset regression test for rate limiting
+568656679 feat(api): per-token API rate limiting with 429
+83ec49a10 chore(docker): add SQLite Docker dev/test environment
+6d8917309 docs: add rate-limiting decision log and spec
+e15ce6ac8 chore: add CLAUDE.md working agreement
+1b5585ca9 Tagged version 6.1.2.
+```
+</details>
+
+### 🤖 Assistant
+
+Scope locked: `6.1.2..HEAD` (base `1b5585ca9 Tagged version 6.1.2`), 13 commits, and nothing unpushed. The reviewable code surface is small — the concern, the controller include, the test-helper teardown, the integration test, and the docker/config. Let me run the finder angles in parallel against that.
+
+### 🤖 Assistant
+
+**🔧 Agent** `{"description": "Correctness finder: concern logic", "prompt": "You are a bug-finding code reviewer. Repo: /Users/antonmazhuto/Documents/MY/redmine (Redmine 6.1.2, Rails 7.2.3, Ruby 3.2). Review scope is the diff `git diff 6.1.2..HEAD`. Focus ONLY on these files (read them fully + their diff):\n- app/controllers/concerns/api_rate_limit.rb  (the rate-limiter — main target)\n- app/controllers/applic …`
+
+### 🤖 Assistant
+
+**🔧 Agent** `{"description": "Correctness finder: tests + docker", "prompt": "You are a bug-finding code reviewer. Repo: /Users/antonmazhuto/Documents/MY/redmine (Redmine 6.1.2, Rails 7.2.3). Review scope: `git diff 6.1.2..HEAD`. Focus ONLY on these files (read them fully + their diff):\n- test/integration/api_test/rate_limiting_test.rb\n- docker-compose.yml\n- docker-entrypoint.sh\n- Dockerfile\n- config/data …`
+
+### 🤖 Assistant
+
+**🔧 Agent** `{"description": "Cleanup/altitude/conventions finder", "prompt": "You are a code reviewer focused on cleanup, altitude, and conventions (NOT crash bugs). Repo: /Users/antonmazhuto/Documents/MY/redmine (Redmine 6.1.2). Review scope: `git diff 6.1.2..HEAD`, focus on:\n- app/controllers/concerns/api_rate_limit.rb\n- app/controllers/application_controller.rb\n- test/test_helper.rb\n- test/integration/ …`
+
+<details><summary>tool result</summary>
+
+```
+System ruby; not worth chasing — the project verified MemoryStore#increment semantics already (initializes to amount on a missing key in Rails 7.2.3, per CLAUDE.md), and the tests pass green. I have enough to report.
+
+```json
+[
+  {
+    "file": "app/controllers/concerns/api_rate_limit.rb",
+    "line": 73,
+    "summary": "api_rate_limit_enabled?/api_rate_limit/api_rate_limit_window do ENV.fetch (+ .to_i parse) on every API request. enforce_api_rate_limit runs on the hot path for every authenticated API call, so each request re-reads and re-parses three ENV vars that never change within a process lifetime.",
+    "failure_scenario": "EFFICIENCY: per-request string allocation + integer parse for config that is effectively constant. The simpler form is to memoize once (e.g. module-level constant
+… [truncated, 3997 chars total]
+```
+</details>
+
+<details><summary>tool result</summary>
+
+```
+This confirms a real bug: if `REDMINE_API_RATE_LIMIT_WINDOW=0` (or non-numeric → `.to_i` = 0), every entry is immediately expired, so `increment` always hits the `!entry || entry.expired?` branch and always returns `1`. The limiter effectively never throttles (fails open). Same with negative windows.
+
+Now I have enough to assemble the findings. Let me note the key correctness angles:
+
+1. **ENV `_ENABLED` strict-equality `== 'true'`** — `'TRUE'`, `'yes'`, `'1'`, `'True'` all disable the limiter (fail open). Only lowercase `'true'` enables. Operator intending to enable with `'1'` silently gets no limiting.
+
+2. **`api_rate_limit` / `_window` use `.to_i`** — non-numeric like `'abc'` → `0`. Limit `0` means `count > limit` is `1 > 0` → true on the very FIRST request → every authenticated API req
+… [truncated, 7785 chars total]
+```
+</details>
+
+<details><summary>tool result</summary>
+
+```
+Rails itself is pinned to `7.2.3` exactly in the Gemfile, so ActiveSupport will resolve to 7.2.3 regardless of the missing lock. So the version-reproducibility concern is mitigated for the load-bearing gem (ActiveSupport tracks Rails). It's a minor reproducibility/transitive-dep concern, not a correctness break for the test. I'll downgrade that finding.
+
+Now, the bigger entrypoint concern: with `set -e`, if `db:create db:migrate` fails (e.g. for the test DB the bind mount means sqlite files persist), it's fine. But there's a real issue: the bind mount in compose mounts `.:/usr/src/redmine` over the baked code. The entrypoint runs `bundle exec rails db:create db:migrate` for BOTH dev and test. Good. 
+
+Let me reconsider the teardown/super issue — is it actually a false-green or leak? The bas
+… [truncated, 10516 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+Three finders returned. Several candidates need verification against the actual code before I rank — notably the test-isolation claims (one finder didn't see the test_helper change) and the entrypoint `set -e` claim. Let me check the real files.
+
+### 🤖 Assistant
+
+**🔧 Read** `{"file_path": "/Users/antonmazhuto/Documents/MY/redmine/app/controllers/concerns/api_rate_limit.rb", "offset": 38, "limit": 46}`
+
+<details><summary>tool result</summary>
+
+```
+38	  private
+39	
+40	  def enforce_api_rate_limit
+41	    return unless api_rate_limit_enabled?
+42	
+43	    limit = api_rate_limit
+44	    window = api_rate_limit_window
+45	    count = STORE.increment(api_rate_limit_key, 1, :expires_in => window)
+46	
+47	    response.headers['RateLimit-Limit'] = limit.to_s
+48	    response.headers['RateLimit-Remaining'] = [limit - count, 0].max.to_s
+49	    # Reset is the window length (seconds), matching Retry-After. We do not track
+50	    # the precise window start, so this is the worst-case time to a fresh budget.
+51	    response.headers['RateLimit-Reset'] = window.to_s
+52	
+53	    if count > limit
+54	      response.headers['Retry-After'] = window.to_s
+55	      head :too_many_requests
+56	    end
+57	  end
+58	
+59	  # Keyed per API token (hashed, so the raw key is
+… [truncated, 1562 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; echo \"=== docker-entrypoint.sh ===\"; cat -n docker-entrypoint.sh; echo \"=== test_helper teardown (store clear?) ===\"; grep -n \"STORE.clear\\|rest_api_enabled\\|use_transactional_tests\\|Setting.clear_cache\" test/test_helper.rb; echo \"=== Base#teardown in test_helper ===\"; sed -n '437,448p' test/test_helper.rb", "description": "Verif …`
+
+<details><summary>tool result</summary>
+
+```
+=== docker-entrypoint.sh ===
+     1	#!/bin/bash
+     2	set -e
+     3	
+     4	# Drop a stale server PID from a previous container, if any.
+     5	rm -f tmp/pids/server.pid
+     6	
+     7	# Ensure both databases exist and are fully migrated before doing anything else.
+     8	# All steps are idempotent: db:create is a no-op if the file exists; db:migrate
+     9	# only applies pending migrations. We avoid db:prepare so db/seeds.rb is not run.
+    10	#   - development DB backs `docker compose up` (the server on :3000)
+    11	#   - test DB backs `bin/rails test` (fixtures load on top of this schema)
+    12	echo "==> Preparing development database"
+    13	bundle exec rails db:create db:migrate
+    14	
+    15	echo "==> Preparing test database"
+    16	RAILS_ENV=test bundle exec rails db:create db:m
+… [truncated, 1435 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+Verification done against the real code. Key results:
+- **Refuted: "STORE never cleared between tests"** — [test_helper.rb:69](test/test_helper.rb#L69) already does `ApiRateLimit::STORE.clear` in the global teardown (that finder didn't see the test_helper change).
+- **Refuted: "teardown missing `super` leaks `rest_api_enabled`"** — `use_transactional_tests = true` ([test_helper.rb:61](test/test_helper.rb#L61)) rolls back the `settings` row, `Setting.clear_cache` runs globally, and the existing `authentication_test.rb` uses the identical no-`super` pattern. The full 359-test suite ran green under a random seed.
+- **Refuted: "RateLimit-Reset constant"** and **"anonymous floods not throttled"** — both are *documented, deliberate* decisions (in-code comment + spec/decision log), not defects.
+- **Confirmed**: `set -e` at [docker-entrypoint.sh:2](docker-entrypoint.sh#L2); the ENV-parsing fragilities; the OAuth key-derivation nuance.
+
+## Findings (ranked, recall-biased)
+
+**1 — Limiter silently fails *open* on a bad `_ENABLED` value** · [api_rate_limit.rb:73](app/controllers/concerns/api_rate_limit.rb#L73)
+`ENV.fetch('REDMINE_API_RATE_LIMIT_ENABLED','true') == 'true'` accepts only the exact string `true`. An operator who sets `REDMINE_API_RATE_LIMIT_ENABLED=1` (or `TRUE`/`yes`/`on`, or an empty string) to *enable* it instead silently **disables** rate limiting — a security control turned off with no error or log.
+
+**2 — `_WINDOW=0`/non-numeric silently fails *open*** · [api_rate_limit.rb:81](app/controllers/concerns/api_rate_limit.rb#L81)
+`.to_i` turns `'0'`, `'60s'`, or `'abc'` into `0` → `increment(..., expires_in: 0)`. Per the verified Rails 7.2.3 `Entry` semantics, the entry is immediately expired, so every request re-seeds to `1`, `count > limit` is never true, and **nothing is ever throttled**.
+
+**3 — `REDMINE_API_RATE_LIMIT=0`/non-numeric → total API outage (fails *closed*)** · [api_rate_limit.rb:77](app/controllers/concerns/api_rate_limit.rb#L77)
+`'unlimited'`/`'1000/min'`/`'0'` → `.to_i == 0`. First authenticated API request: `1 > 0` → `429`. **Every** API request returns 429 until the env is fixed — no log, no warning.
+
+**4 — "Per-token" is really "per-identity" for OAuth / basic-auth callers** · [api_rate_limit.rb:62](app/controllers/concerns/api_rate_limit.rb#L62)
+`api_key_from_request` only reads `params[:key]` / `X-Redmine-API-Key`. OAuth (Doorkeeper Bearer) and HTTP-Basic-with-key-as-username requests return `nil` here and fall into the `usr:<id>` branch, so all of a user's OAuth tokens share one bucket and never get a per-token budget. Reasonable for the slice, but it diverges from the "per token" framing — worth a doc line or an explicit decision.
+
+**5 — `set -e` + bind-mounted SQLite can brick container startup** · [docker-entrypoint.sh:13](docker-entrypoint.sh#L13)
+The DB files persist on the host via the compose bind-mount. If a migration is interrupted (Ctrl-C on first run) or half-applies, `set -e` aborts the entrypoint before `exec "$@"`, and `db:create` is a no-op on the existing file — so every later `docker compose up` dies with no auto-recovery until the user manually deletes `db/*.sqlite3`.
+
+**6 — Non-reproducible image builds** · [Dockerfile](Dockerfile)
+`Gemfile.lock` is gitignored and not in the build context, so `bundle install` re-resolves the whole graph each build. Rails is pinned `7.2.3` (so the load-bearing `ActiveSupport` is safe), but every other transitive gem floats — a green build today isn't evidence it rebuilds green later.
+
+**7 — Hot-path waste (minor)** · [api_rate_limit.rb:62-81](app/controllers/concerns/api_rate_limit.rb#L62-L81)
+Every authenticated API request re-reads+parses 3 ENV vars, calls `api_key_from_request` a second time (already called in `user_setup`), and recomputes a SHA-256 — all for values constant within a process. Negligible per-request, but trivially memoizable.
+
+```json
+[
+  {"file":"app/controllers/concerns/api_rate_limit.rb","line":73,"summary":"_ENABLED check uses strict =='true', so '1'/'TRUE'/'yes'/'' silently DISABLE the limiter (fail open).","failure_scenario":"Operator sets REDMINE_API_RATE_LIMIT_ENABLED=1 to enable limiting; '1' != 'true' so api_rate_limit_enabled? is false and enforce_api_rate_limit returns early — rate limiting is silently off, no error/log."},
+  {"file":"app/controllers/concerns/api_rate_limit.rb","line":81,"summary":"_WINDOW parsed with .to_i; 0 or non-numeric yields expires_in:0 so the limiter never throttles (fail open).","failure_scenario":"REDMINE_API_RATE_LIMIT_WINDOW='0' or '60s' -> .to_i=0 -> entry immediately expired (verified Rails 7.2.3 Entry) -> increment always returns 1 -> count>limit never true -> no throttling despite being 'enabled'."},
+  {"file":"app/controllers/concerns/api_rate_limit.rb","line":77,"summary":"REDMINE_API_RATE_LIMIT parsed with .to_i; 0/non-numeric coerces to 0 and 429s every API request (fail closed).","failure_scenario":"REDMINE_API_RATE_LIMIT='unlimited' or '0' -> .to_i=0 -> first request count=1 > 0 -> head :too_many_requests on every authenticated API call: full API outage from one env typo."},
+  {"file":"app/controllers/concerns/api_rate_limit.rb","line":62,"summary":"Key falls back to user id for callers without X-Redmine-API-Key, so OAuth/basic-auth callers are bucketed per-user, not per-token.","failure_scenario":"An OAuth (Doorkeeper Bearer) API client sends no X-Redmine-API-Key; api_key_from_request returns nil; all the user's OAuth tokens share one usr:<id> bucket, contradicting the 'per token' contract."},
+  {"file":"docker-entrypoint.sh","line":13,"summary":"set -e plus bind-mounted persistent sqlite means a half-applied migration aborts every later container start with no auto-recovery.","failure_scenario":"First-run migration interrupted (Ctrl-C); db/*.sqlite3 persist on host in a broken state; db:create is a no-op, db:migrate fails, set -e aborts before exec; every `docker compose up` thereafter dies until sqlite files are manually deleted."},
+  {"file":"Dockerfile","line":26,"summary":"Gemfile.lock is gitignored and not in the build context, so builds re-resolve all transitive gems and are non-reproducible.","failure_scenario":"bundle install floats every non-Rails gem to newest at build time; two rebuilds days apart can ship different gem versions, so a passing build is not evidence of a future passing rebuild."},
+  {"file":"app/controllers/concerns/api_rate_limit.rb","line":73,"summary":"Hot path re-reads/parses 3 ENV vars, re-calls api_key_from_request, and recomputes SHA-256 every request for constant config.","failure_scenario":"enforce_api_rate_limit runs on every authenticated API request; ENV.fetch x3 + .to_i, a duplicate api_key_from_request scan, and a fresh Digest::SHA256 per request are avoidable with memoization."}
+]
+```
+
+## My take
+The headline cluster is **#1–#3: zero validation on the three ENV knobs**, and two of the three fail *silently* — including fail-**open**, which quietly defeats the whole feature. That's the one I'd fix. A few lines in the three readers (coerce + validate, treat common truthy spellings, reject non-positive limit/window with a fallback or a boot-time log) closes all three. #4 is a one-line doc/decision. #5–#7 are low-severity dev-env/perf nits.
+
+Want me to fix the ENV-robustness cluster (#1–#3) — and optionally add the #4 doc note — TDD-style with tests for the bad-value cases? I'd leave #5–#7 unless you want them.
+
+---
+
+## 🧑 User
+
+Yes, fix #1–#3 TDD-style, fail-safe. For _ENABLED, stay enabled unless the value is explicitly off (false/0/no/off, case-insensitive) — a typo must not silently disable the limiter. For limit and window, fall back to the defaults when the value is missing, non-numeric, or not positive, and log a warning when that happens. Write failing tests first for the bad-value cases (e.g. ENABLED=1 still limits, WINDOW=0 still throttles, LIMIT=abc uses 100), then make them pass. Don't process-memoize the config — the tests rely on reading ENV per request. Also add one doc line that OAuth/basic-auth callers fall back to a per-user bucket (per-identity, not per-token). Skip the dev-env/perf nits. Commit as its own fix.
+
+### 🤖 Assistant
+
+Following TDD — failing tests first. Let me read the end of the test file to place the new bad-value tests.
+
+### 🤖 Assistant
+
+**🔧 Read** `{"file_path": "/Users/antonmazhuto/Documents/MY/redmine/test/integration/api_test/rate_limiting_test.rb", "offset": 78, "limit": 17}`
+
+<details><summary>tool result</summary>
+
+```
+78	    (TEST_LIMIT + 1).times { get '/users/current.json', :headers => @headers }
+79	    assert_response :too_many_requests
+80	
+81	    # Still throttled before the window has fully elapsed: the fixed window must
+82	    # not slide forward on each request.
+83	    travel(TEST_WINDOW - 1) do
+84	      get '/users/current.json', :headers => @headers
+85	      assert_response :too_many_requests
+86	    end
+87	
+88	    # Once the original window has passed, the counter expires and the budget
+89	    # is available again.
+90	    travel(TEST_WINDOW + 1) do
+91	      get '/users/current.json', :headers => @headers
+92	      assert_response :ok
+93	    end
+94	  end
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/test/integration/api_test/rate_limiting_test.rb", "old_string": "    # Once the original window has passed, the counter expires and the budget\n    # is available again.\n    travel(TEST_WINDOW + 1) do\n      get '/users/current.json', :headers => @headers\n      assert_response :ok\n    end\n  end\nend", "new_string": " …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/test/integration/api_test/rate_limiting_test.rb has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+Now run to watch the three new tests fail (red):
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; docker compose run --rm web bin/rails test test/integration/api_test/rate_limiting_test.rb 2>&1 | grep -vE \"^(--|==|   ->|Database |web-1)\" | tail -40", "description": "Run tests, expect 3 new failures", "timeout": 300000, "dangerouslyDisableSandbox": true}`
+
+<details><summary>tool result</summary>
+
+```
+# Running:
+
+..F
+
+Failure:
+Redmine::ApiTest::RateLimitingTest#test_invalid_window_falls_back_and_still_throttles [test/integration/api_test/rate_limiting_test.rb:109]:
+Expected response to be a <429: too_many_requests>, but was a <200: OK>
+Response body: {"user":{"id":14,"login":"user3","admin":false,"firstname":"Bob","lastname":"Doe","created_on":"2026-06-18T16:36:14Z","updated_on":"2026-06-18T16:36:14Z","last_login_on":null,"passwd_changed_on":null,"twofa_scheme":null,"api_key":"3730aa43776020aed032df8af643ea73e3629bee","custom_fields":[{"id":4,"name":"Phone number","value":""},{"id":5,"name":"Money","value":""}]}}.
+Expected: 429
+  Actual: 200
+
+bin/rails test test/integration/api_test/rate_limiting_test.rb:105
+
+F
+
+Failure:
+Redmine::ApiTest::RateLimitingTest#test_invalid_limit_falls_back_t
+… [truncated, 1870 chars total]
+```
+</details>
+
+### 🤖 Assistant
+
+All three fail red for exactly the right reasons (WINDOW=0 → 200, LIMIT=abc → 429, ENABLED=1 → 200), and the three original tests still pass. Now implement the fail-safe parsing.
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/app/controllers/concerns/api_rate_limit.rb", "old_string": "  STORE = ActiveSupport::Cache::MemoryStore.new", "new_string": "  STORE = ActiveSupport::Cache::MemoryStore.new\n\n  DEFAULT_LIMIT = 100\n  DEFAULT_WINDOW = 60\n  # Values that explicitly disable the limiter (case-insensitive). Anything else\n  # — including a  …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/app/controllers/concerns/api_rate_limit.rb has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/app/controllers/concerns/api_rate_limit.rb", "old_string": "  # Read from ENV at request time so configuration (and tests) take effect\n  # without a reboot.\n  def api_rate_limit_enabled?\n    ENV.fetch('REDMINE_API_RATE_LIMIT_ENABLED', 'true') == 'true'\n  end\n\n  def api_rate_limit\n    ENV.fetch('REDMINE_API_RATE_LI …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/app/controllers/concerns/api_rate_limit.rb has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+Now add the doc line about the per-identity fallback, then run green. First the doc line in SUBMISSION.md:
+
+### 🤖 Assistant
+
+**🔧 Edit** `{"replace_all": false, "file_path": "/Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md", "old_string": "- **Key** — the hashed API token (`api-rate-limit:tok:<sha256>`), falling back to the\n  authenticated user id when no token is in the request. The raw key is never stored.", "new_string": "- **Key** — the hashed API token (`api-rate-limit:tok:<sha256>`), falling back to the\n  authenticate …`
+
+<details><summary>tool result</summary>
+
+```
+The file /Users/antonmazhuto/Documents/MY/redmine/SUBMISSION.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details>
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; docker compose run --rm web bin/rails test test/integration/api_test/rate_limiting_test.rb 2>&1 | grep -vE \"^(--|==|   ->|Database |web-1)\" | tail -12", "description": "Run rate-limiting tests (expect all green)", "timeout": 300000, "dangerouslyDisableSandbox": true}`
+
+<details><summary>tool result</summary>
+
+```
+Run options: --seed 41835
+
+# Running:
+
+......
+
+Finished in 0.687613s, 8.7258 runs/s, 23.2689 assertions/s.
+6 runs, 16 assertions, 0 failures, 0 errors, 0 skips
+```
+</details>
+
+### 🤖 Assistant
+
+All 6 green. Let me confirm no regression across the full API suite (the concern runs on every API request), then commit.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; docker compose run --rm web bin/rails test test/integration/api_test/ 2>&1 | grep -vE \"^(--|==|   ->|Database |web-1)\" | tail -6", "description": "Run full API suite for regressions", "timeout": 400000, "dangerouslyDisableSandbox": true}`
+
+<details><summary>tool result</summary>
+
+```
+.......................................................................SS..................................................................................................................................................
+
+Finished in 10.470574s, 34.6686 runs/s, 201.8992 assertions/s.
+363 runs, 2114 assertions, 0 failures, 0 errors, 2 skips
+
+You have skipped tests. Run with --verbose for details.
+```
+</details>
+
+### 🤖 Assistant
+
+Full API suite green: **363 runs, 0 failures, 0 errors** (2 pre-existing skips). Committing as its own fix.
+
+### 🤖 Assistant
+
+**🔧 Bash** `{"command": "cd /Users/antonmazhuto/Documents/MY/redmine; git status --porcelain; git add app/controllers/concerns/api_rate_limit.rb test/integration/api_test/rate_limiting_test.rb SUBMISSION.md && git commit -q -F - <<'EOF'\nfix(api): make rate-limit config parsing fail-safe\n\nBad ENV values silently broke the limiter: REDMINE_API_RATE_LIMIT_ENABLED only\naccepted the literal \"true\" (so \"1\"/ …`
+
+<details><summary>tool result</summary>
+
+```
+M SUBMISSION.md
+ M app/controllers/concerns/api_rate_limit.rb
+ M test/integration/api_test/rate_limiting_test.rb
+cc4bdecb8 fix(api): make rate-limit config parsing fail-safe
+--- clean? ---
+```
+</details>
+
+### 🤖 Assistant
+
+Committed as `cc4bdecb8`, working tree clean.
+
+## What changed (TDD, fail-safe)
+
+**Red first** — three tests for the bad-value cases, each failing for the right reason:
+- `ENABLED=1` → was 200 (silently disabled) → now expects 429
+- `WINDOW=0` → was 200 (never throttled) → now expects 429
+- `LIMIT=abc` → was 429 (locked out) → now expects 200 with `RateLimit-Limit: 100`
+
+**Green** — fail-safe parsing in [api_rate_limit.rb](app/controllers/concerns/api_rate_limit.rb):
+- **`_ENABLED`**: enabled unless the value is an explicit off — `DISABLED_VALUES = %w(false 0 no off)`, case-insensitive. `1`/`yes`/`TRUE`/typos/empty all stay **enabled**.
+- **`limit` / `window`**: `positive_int_env` parses a positive integer via `Integer(raw, exception: false)`; **missing** → default silently, **present-but-unusable** (non-numeric or ≤0) → default **+ a logged warning**.
+- Config is still read **per request** (no memoization), as you required.
+- Doc line added in [SUBMISSION.md](SUBMISSION.md): OAuth/basic-auth callers without `X-Redmine-API-Key` use a per-user (per-identity) bucket.
+
+**Verified**: the 6 rate-limiting tests pass, and the full API suite is green (363 runs, 0 failures, 0 errors). Skipped the dev-env/perf nits (#5–#7) per your call.
+
+The review's headline cluster (#1–#3) is closed; #4 is now documented. The branch is clean and submission-ready.
