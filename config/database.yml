@@ -1,0 +1,20 @@
+# SQLite3 configuration for the rate-limiting take-home slice (Docker).
+# NOTE: this file must exist before `bundle install` — the Gemfile reads it to
+# decide which database gems to install (see Gemfile: `database_file = ...`).
+default: &default
+  adapter: sqlite3
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  timeout: 5000
+
+development:
+  <<: *default
+  database: db/redmine_development.sqlite3
+
+# Warning: The test database is erased and regenerated from migrations.
+test:
+  <<: *default
+  database: db/redmine_test.sqlite3
+
+production:
+  <<: *default
+  database: db/redmine.sqlite3

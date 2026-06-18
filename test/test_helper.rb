@@ -64,6 +64,9 @@ class ActiveSupport::TestCase
   # Clear Settings cache after each test to prevent test interference
   teardown do
     Setting.clear_cache
+    # Reset the per-process API rate-limit counters so a token/user's request
+    # count does not leak across tests and trip the limiter in unrelated tests.
+    ApiRateLimit::STORE.clear
   end
 
   def uploaded_test_file(name, mime)
