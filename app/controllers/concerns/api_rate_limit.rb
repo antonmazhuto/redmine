@@ -28,6 +28,12 @@ module ApiRateLimit
   # original expires_at on existing keys, so this is a true fixed window.
   STORE = ActiveSupport::Cache::MemoryStore.new
 
+  DEFAULT_LIMIT = 100
+  DEFAULT_WINDOW = 60
+  # Values that explicitly disable the limiter (case-insensitive). Anything else
+  # — including a typo or an unexpected spelling — leaves it enabled (fail-safe).
+  DISABLED_VALUES = %w(false 0 no off).freeze
+
   included do
     # Registered after the auth chain (see ApplicationController) so
     # User.current and the request token are already resolved.
@@ -67,17 +73,35 @@ module ApiRateLimit
     end
   end
 
-  # Read from ENV at request time so configuration (and tests) take effect
-  # without a reboot.
+  # Config is read from ENV at request time so changes (and tests) take effect
+  # without a reboot. Parsing is fail-safe: bad values keep the limiter on at the
+  # defaults rather than silently disabling or zeroing it.
+
+  # Enabled unless the value is an explicit "off"; a typo never disables it.
   def api_rate_limit_enabled?
-    ENV.fetch('REDMINE_API_RATE_LIMIT_ENABLED', 'true') == 'true'
+    value = ENV['REDMINE_API_RATE_LIMIT_ENABLED']
+    value.nil? || !DISABLED_VALUES.include?(value.strip.downcase)
   end
 
   def api_rate_limit
-    ENV.fetch('REDMINE_API_RATE_LIMIT', '100').to_i
+    positive_int_env('REDMINE_API_RATE_LIMIT', DEFAULT_LIMIT)
   end
 
   def api_rate_limit_window
-    ENV.fetch('REDMINE_API_RATE_LIMIT_WINDOW', '60').to_i
+    positive_int_env('REDMINE_API_RATE_LIMIT_WINDOW', DEFAULT_WINDOW)
+  end
+
+  # A positive integer from ENV. A missing value uses the default silently; a
+  # present-but-unusable value (non-numeric or not positive) falls back to the
+  # default and logs a warning so the misconfiguration is visible.
+  def positive_int_env(name, default)
+    raw = ENV[name]
+    return default if raw.nil? || raw.strip.empty?
+
+    value = Integer(raw, exception: false)
+    return value if value && value > 0
+
+    Rails.logger&.warn("Invalid #{name}=#{raw.inspect}; using default #{default}")
+    default
   end
 end

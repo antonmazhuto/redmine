@@ -92,4 +92,28 @@ class Redmine::ApiTest::RateLimitingTest < Redmine::ApiTest::Base
       assert_response :ok
     end
   end
+
+  # --- misconfiguration must be fail-safe (keep limiting), not fail-open/closed ---
+
+  def test_enabled_accepts_non_canonical_truthy_value
+    # A common "enable" spelling must not silently disable the limiter.
+    ENV['REDMINE_API_RATE_LIMIT_ENABLED'] = '1'
+    (TEST_LIMIT + 1).times { get '/users/current.json', :headers => @headers }
+    assert_response :too_many_requests
+  end
+
+  def test_invalid_window_falls_back_and_still_throttles
+    # window=0 would make counters expire immediately (never throttle); fall back.
+    ENV['REDMINE_API_RATE_LIMIT_WINDOW'] = '0'
+    (TEST_LIMIT + 1).times { get '/users/current.json', :headers => @headers }
+    assert_response :too_many_requests
+  end
+
+  def test_invalid_limit_falls_back_to_default
+    # A non-numeric limit must not coerce to 0 and lock everyone out.
+    ENV['REDMINE_API_RATE_LIMIT'] = 'abc'
+    get '/users/current.json', :headers => @headers
+    assert_response :ok
+    assert_equal '100', response.headers['RateLimit-Limit'] # default, not 0
+  end
 end

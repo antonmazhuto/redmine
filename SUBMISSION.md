@@ -45,6 +45,9 @@ against Rails 7.2.3 source.
 
 - **Key** — the hashed API token (`api-rate-limit:tok:<sha256>`), falling back to the
   authenticated user id when no token is in the request. The raw key is never stored.
+  Callers that don't send an `X-Redmine-API-Key` (OAuth/Doorkeeper bearer, or HTTP Basic
+  with the key as username) use the **per-user** bucket — so for those the budget is
+  per-identity, not strictly per-token.
 - **Counter** — a dedicated `ActiveSupport::Cache::MemoryStore` (not `Rails.cache`, which is
   a `NullStore` in test/dev). `STORE.increment(key, 1, expires_in: window)`; over the limit
   → set `Retry-After` and `head :too_many_requests`.
